@@ -171,9 +171,9 @@ class IrcClient:
                 # Store when we actually joined
                 if (
                     len(line_parts) >= 3
-                    and line_parts[1] == '366'
+                    and line_parts[1] == '353'
                     and line_parts[2] == self._nick
-                    and line_parts[3] in self._channels
+                    and line_parts[4] in self._channels
                 ):
                     logger.info("Recording joined channel: %s", line_parts[3])
                     self._joined_channels.add(line_parts[3])
