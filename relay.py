@@ -175,8 +175,8 @@ class IrcClient:
                     and line_parts[2] == self._nick
                     and line_parts[4] in self._channels
                 ):
-                    logger.info("Recording joined channel: %s", line_parts[3])
-                    self._joined_channels.add(line_parts[3])
+                    logger.info("Recording joined channel: %s", line_parts[4])
+                    self._joined_channels.add(line_parts[4])
                     continue
 
 
