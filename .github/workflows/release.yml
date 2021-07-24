@@ -1,0 +1,17 @@
+name: Release
+on:
+  push: {tags: ['*']}
+permissions:
+  deployments: write
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Crease a release
+        uses: ncipollo/release-action@v1
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
