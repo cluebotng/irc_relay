@@ -218,7 +218,9 @@ class UdpListener:
 
 def main():
     """Main logic - run the IRC server on a thread and the listener on the parent."""
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    logging.basicConfig(stream=sys.stderr,
+                        level=logging.INFO,
+                        format='%(asctime)s [%(levelname)s] %(message)s')
     logger.addHandler(TimedRotatingFileHandler(os.path.expanduser('~/logs/irc_relay.log'),
                                                when="D",
                                                interval=1,
