@@ -41,41 +41,60 @@ class Config:
 
     def __init__(self, config_path: str):
         self._parser = configparser.ConfigParser()
-        self._parser.read(config_path)
+        if os.path.isfile(config_path):
+            self._parser.read(config_path)
 
     @property
     def irc_host(self):
-        return self._parser["irc"]["host"]
+        return self._parser.get("irc", "host", fallback="irc.libera.chat")
 
     @property
     def irc_port(self):
-        return int(self._parser["irc"]["port"])
+        return self._parser.get("irc", "port", fallback=6697)
 
     @property
     def irc_nick(self):
-        return self._parser["irc"]["nick"]
+        return self._parser.get(
+            "irc",
+            "nick",
+            fallback=os.environ.get("CBNG_RELAY_IRC_NICK", "CBNGRelay_Development"),
+        )
 
     @property
     def irc_password(self):
-        return self._parser["irc"].get("password")
+        return self._parser.get(
+            "irc", "password", fallback=os.environ.get("CBNG_RELAY_IRC_PASSWORD")
+        )
 
     @property
     def irc_channels(self):
-        return [c.strip() for c in self._parser["irc"]["channels"].split(",")]
+        channels = self._parser.get(
+            "irc",
+            "channels",
+            fallback="#wikipedia-en-cbngfeed,#wikipedia-en-cbngrevertfeed",
+        )
+        return [c.strip() for c in channels.split(",")]
 
     @property
     def listener_address(self):
-        return self._parser["listener"]["address"]
+        return self._parser.get("listener", "address", fallback="0.0.0.0")
 
     @property
     def listener_port(self):
-        return int(self._parser["listener"]["port"])
+        return self._parser.getint("listener", "port", fallback=3334)
 
 
 class IrcClient:
     """Basic IRC client designed for relaying."""
 
-    def __init__(self, host: str, port: int, nick: str, password: str = None, channels: List[str] = None):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        nick: str,
+        password: str = None,
+        channels: List[str] = None,
+    ):
         self._host = host
         self._port = port
         self._nick = nick
@@ -87,7 +106,11 @@ class IrcClient:
         self._running = False
 
     def _connect(self):
-        self._c = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+        context = ssl.create_default_context()
+        self._c = context.wrap_socket(
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+            server_hostname=self._host,
+        )
         self._c.connect((self._host, self._port))
         self._running = True
 
@@ -104,7 +127,9 @@ class IrcClient:
     def send_to_channel(self, channel, message):
         clean_message = message.replace("\r", "").replace("\n", "")
         if channel not in self._joined_channels:
-            logger.warning("Skipping non-joined channel (%s) message: %s", channel, clean_message)
+            logger.warning(
+                "Skipping non-joined channel (%s) message: %s", channel, clean_message
+            )
             return
 
         self._send("PRIVMSG {} :{}".format(channel, clean_message))
@@ -119,12 +144,12 @@ class IrcClient:
                 raise RuntimeError("Disconnected")
 
             for line in lines:
-                line, line_parts = line.strip(), line.strip().split(' ')
+                line, line_parts = line.strip(), line.strip().split(" ")
                 logger.info("Processing from server: %s", line)
 
                 # Reply to PING
                 if line.startswith("PING "):
-                    self._send('PONG {}'.format(line.split(":")[1]))
+                    self._send("PONG {}".format(line.split(":")[1]))
                     continue
 
                 # Send user details after initial banner
@@ -144,7 +169,9 @@ class IrcClient:
                 # Provide authentication details
                 if line.endswith("AUTHENTICATE +"):
                     if not self._in_authentication:
-                        raise RuntimeError("Got authentication request outside of authentication handshake")
+                        raise RuntimeError(
+                            "Got authentication request outside of authentication handshake"
+                        )
                     logger.info("Sending SASL authentication")
                     auth_string = base64.b64encode(
                         "{}\0{}\0{}".format(
@@ -171,7 +198,7 @@ class IrcClient:
                 # Store when we actually joined
                 if (
                     len(line_parts) >= 3
-                    and line_parts[1] == '353'
+                    and line_parts[1] == "353"
                     and line_parts[2] == self._nick
                     and line_parts[4] in self._channels
                 ):
@@ -218,21 +245,21 @@ class UdpListener:
 
 def main():
     """Main logic - run the IRC server on a thread and the listener on the parent."""
-    log_format = '%(asctime)s [%(levelname)s] %(message)s'
-    logging.basicConfig(stream=sys.stderr,
-                        level=logging.INFO,
-                        format=log_format)
+    log_format = "%(asctime)s [%(levelname)s] %(message)s"
+    logging.basicConfig(stream=sys.stderr, level=logging.INFO, format=log_format)
 
-    log_file = TimedRotatingFileHandler(os.path.expanduser('~/logs/irc_relay.log'),
-                                        when="D",
-                                        interval=1,
-                                        backupCount=10)
+    os.makedirs(os.path.expanduser("~/logs"), exist_ok=True)
+    log_file = TimedRotatingFileHandler(
+        os.path.expanduser("~/logs/irc_relay.log"), when="D", interval=1, backupCount=10
+    )
     log_file.setFormatter(logging.Formatter(log_format))
     logger.addHandler(log_file)
 
     cfg = Config("relay.cfg")
 
-    irc = IrcClient(cfg.irc_host, cfg.irc_port, cfg.irc_nick, cfg.irc_password, cfg.irc_channels)
+    irc = IrcClient(
+        cfg.irc_host, cfg.irc_port, cfg.irc_nick, cfg.irc_password, cfg.irc_channels
+    )
     listener = UdpListener(irc, cfg.listener_address, cfg.listener_port)
 
     irc_server = threading.Thread(target=irc.loop)
@@ -244,7 +271,7 @@ def main():
     while irc_server.is_alive() and udp_server.is_alive():
         pass
 
-    logger.error('Thread died: %s / %s', irc_server.is_alive(), udp_server.is_alive())
+    logger.error("Thread died: %s / %s", irc_server.is_alive(), udp_server.is_alive())
     udp_server.join()
     irc_server.join()
 
