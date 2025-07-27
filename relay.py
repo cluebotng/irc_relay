@@ -71,7 +71,7 @@ class Config:
         channels = self._parser.get(
             "irc",
             "channels",
-            fallback="#wikipedia-en-cbngfeed,#wikipedia-en-cbngrevertfeed",
+            fallback="#wikipedia-en-cbngfeed,#wikipedia-en-cbngrevertfeed,#wikipedia-en-cbngreview",
         )
         return [c.strip() for c in channels.split(",")]
 
