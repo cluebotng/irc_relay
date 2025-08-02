@@ -32,8 +32,34 @@ import sys
 import threading
 from logging.handlers import TimedRotatingFileHandler
 from typing import List
+import time
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Basic rate limiter."""
+
+    def __init__(self, limit: int = 100, window: int = 30):
+        self.limit = limit
+        self.window = window
+        self.buckets = {}
+
+    def allow(self, channel: str):
+        if channel not in self.buckets:
+            self.buckets[channel] = []
+
+        current_time = time.time()
+        while (
+            self.buckets[channel]
+            and self.buckets[channel][0] < current_time - self.window
+        ):
+            self.buckets[channel].pop(0)
+
+        if len(self.buckets[channel]) <= self.limit:
+            self.buckets[channel].append(current_time)
+            return True
+        return False
 
 
 class Config:
@@ -104,6 +130,7 @@ class IrcClient:
         self._joined_channels = set()
         self._in_authentication = False
         self._running = False
+        self._rate_limiter = RateLimiter()
 
     def _connect(self):
         context = ssl.create_default_context()
@@ -121,18 +148,24 @@ class IrcClient:
         self._joined_channels = set()
 
     def _send(self, message):
-        logger.info("Sending to server: %s", message)
+        logger.info(f"Sending to server: {message}")
         self._c.send("{}\r\n".format(message).encode("utf-8"))
 
     def send_to_channel(self, channel, message):
         clean_message = message.replace("\r", "").replace("\n", "")
         if channel not in self._joined_channels:
             logger.warning(
-                "Skipping non-joined channel (%s) message: %s", channel, clean_message
+                f"Skipping non-joined channel ({channel}) message: {clean_message}"
             )
             return
 
-        self._send("PRIVMSG {} :{}".format(channel, clean_message))
+        if not self._rate_limiter.allow(channel):
+            logger.warning(
+                f"Skipping due to rate-limit ({channel}) message: {clean_message}"
+            )
+            return
+
+        self._send(f"PRIVMSG {channel} :{clean_message}")
 
     def loop(self):
         self._connect()
@@ -149,15 +182,15 @@ class IrcClient:
 
                 # Reply to PING
                 if line.startswith("PING "):
-                    self._send("PONG {}".format(line.split(":")[1]))
+                    self._send(f"PONG {line.split(':')[1]}")
                     continue
 
                 # Send user details after initial banner
                 if line.endswith("*** No Ident response"):
                     if self._password:
                         self._send("CAP REQ :sasl")
-                    self._send("NICK {}".format(self._nick))
-                    self._send("USER {} * * :{}".format(self._nick, self._nick))
+                    self._send(f"NICK {self._nick}")
+                    self._send(f"USER {self._nick} * * :{self._nick}")
                     continue
 
                 # Request plain login
@@ -174,14 +207,10 @@ class IrcClient:
                         )
                     logger.info("Sending SASL authentication")
                     auth_string = base64.b64encode(
-                        "{}\0{}\0{}".format(
-                            self._nick,
-                            self._nick,
-                            self._password,
-                        ).encode("utf-8")
+                        f"{self._nick}\0{self._nick}\0{self._password}".encode("utf-8")
                     ).decode("utf-8")
 
-                    self._send("AUTHENTICATE {}".format(auth_string))
+                    self._send(f"AUTHENTICATE {auth_string}")
                     continue
 
                 # End the capability negotiation
@@ -192,7 +221,7 @@ class IrcClient:
                 # Join channels
                 if line.endswith("End of /MOTD command."):
                     for channel in self._channels:
-                        self._send("JOIN {}".format(channel))
+                        self._send(f"JOIN {channel}")
                         continue
 
                 # Store when we actually joined
@@ -235,7 +264,7 @@ class UdpListener:
 
             data = data.decode("utf-8").strip()
             if ":" not in data:
-                logger.error("Malformed data: %s", data)
+                logger.error(f"Malformed data: {data}")
                 continue
 
             parts = data.split(":")
@@ -273,7 +302,7 @@ def main():
     while irc_server.is_alive() and udp_server.is_alive():
         pass
 
-    logger.error("Thread died: %s / %s", irc_server.is_alive(), udp_server.is_alive())
+    logger.error(f"Thread died: {irc_server.is_alive()} / {udp_server.is_alive()}")
     udp_server.join()
     irc_server.join()
 
