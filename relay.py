@@ -278,16 +278,18 @@ def main():
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format=log_format)
 
     home_dir = os.environ.get("TOOL_DATA_DIR", os.environ.get("HOME"))
-    log_dir = os.path.join(home_dir, "logs")
-    log_file = os.path.join(log_dir, "irc_relay.log")
+    if os.path.isdir(home_dir):
+        log_dir = os.path.join(home_dir, "logs")
+        log_file = os.path.join(log_dir, "irc_relay.log")
 
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = TimedRotatingFileHandler(log_file, when="D", interval=1, backupCount=10)
-    log_file.setFormatter(logging.Formatter(log_format))
-    logger.addHandler(log_file)
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = TimedRotatingFileHandler(
+            log_file, when="D", interval=1, backupCount=10
+        )
+        log_file.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(log_file)
 
     cfg = Config("relay.cfg")
-
     irc = IrcClient(
         cfg.irc_host, cfg.irc_port, cfg.irc_nick, cfg.irc_password, cfg.irc_channels
     )
