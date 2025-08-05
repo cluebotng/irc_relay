@@ -277,9 +277,8 @@ def main():
     log_format = "%(asctime)s [%(levelname)s] %(message)s"
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format=log_format)
 
-    home_dir = os.environ.get("TOOL_DATA_DIR", os.environ.get("HOME"))
-    if os.path.isdir(home_dir):
-        log_dir = os.path.join(home_dir, "logs")
+    if not os.environ.get("NO_HOME"):
+        log_dir = os.path.join(os.environ.get("HOME"), "logs")
         log_file = os.path.join(log_dir, "irc_relay.log")
 
         os.makedirs(log_dir, exist_ok=True)
