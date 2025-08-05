@@ -97,7 +97,7 @@ class Config:
         channels = self._parser.get(
             "irc",
             "channels",
-            fallback="#wikipedia-en-cbngfeed,#wikipedia-en-cbngrevertfeed,#wikipedia-en-cbngreview",
+            fallback=os.environ.get("CBNG_RELAY_IRC_CHANNELS", "#wikipedia-en-cbngfeed,#wikipedia-en-cbngrevertfeed"),
         )
         return [c.strip() for c in channels.split(",")]
 
