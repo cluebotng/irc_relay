@@ -304,7 +304,6 @@ def main():
         pass
 
     logger.error(f"Thread died: {irc_server.is_alive()} / {udp_server.is_alive()}")
-    import sys
     sys.exit(1)
 
 
