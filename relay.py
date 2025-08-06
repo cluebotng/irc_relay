@@ -304,8 +304,8 @@ def main():
         pass
 
     logger.error(f"Thread died: {irc_server.is_alive()} / {udp_server.is_alive()}")
-    udp_server.join()
-    irc_server.join()
+    import sys
+    sys.exit(1)
 
 
 if __name__ == "__main__":
